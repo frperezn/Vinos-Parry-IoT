@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bodega Vinos Parry – Monitoreo IoT</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mqtt/5.3.4/mqtt.min.js"></script>
+<style>
+  :root {
+    --fondo: #1c0f14;
+    --panel: #2a161d;
+    --borde: #4a2a35;
+    --texto: #f3e9e4;
+    --suave: #b9a39b;
+    --vino: #a3354d;
+    --ok: #6fbf8b;
+    --alerta: #e8a23d;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 24px;
+    background: var(--fondo); color: var(--texto);
+    font-family: Arial, Helvetica, sans-serif; line-height: 1.5;
+  }
+  header { max-width: 960px; margin: 0 auto 24px; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; align-items: flex-end; }
+  h1 { margin: 0; font-size: 28px; font-weight: 700; }
+  header p { margin: 4px 0 0; color: var(--suave); }
+  #estado { padding: 6px 14px; border: 1px solid var(--borde); border-radius: 20px; color: var(--suave); }
+  #estado.conectado { color: var(--ok); border-color: var(--ok); }
+  main { max-width: 960px; margin: 0 auto; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 16px; }
+  .sensor { background: var(--panel); border: 1px solid var(--borde); border-radius: 6px; padding: 20px; }
+  .sensor h2 { margin: 0; font-size: 15px; font-weight: 400; color: var(--suave); }
+  .valor { font-size: 44px; font-weight: 700; margin: 8px 0 4px; }
+  .valor small { font-size: 18px; font-weight: 400; color: var(--suave); margin-left: 4px; }
+  .rango { font-size: 13px; color: var(--suave); }
+  .sensor.fuera { border-color: var(--alerta); }
+  .sensor.fuera .valor { color: var(--alerta); }
+  .sensor.ok .valor { color: var(--texto); }
+  h3 { margin: 32px 0 8px; font-size: 16px; }
+  #log { background: var(--panel); border: 1px solid var(--borde); border-radius: 6px; padding: 12px 16px; margin: 0; list-style: none; font-family: "Courier New", monospace; font-size: 13px; max-height: 240px; overflow-y: auto; }
+  #log li { padding: 2px 0; color: var(--suave); }
+  #log li:first-child { color: var(--texto); }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Bodega Vinos Parry</h1>
+    <p>Monitoreo IoT en tiempo real, bodega 01</p>
+  </div>
+  <div id="estado">Conectando…</div>
+</header>
+
+<main>
+  <section class="grid">
+    <article class="sensor" id="temperatura">
+      <h2>Temperatura</h2>
+      <div class="valor"><span class="num">–</span><small>°C</small></div>
+      <div class="rango">Rango ideal: 12 a 18 °C</div>
+    </article>
+    <article class="sensor" id="humedad">
+      <h2>Humedad relativa</h2>
+      <div class="valor"><span class="num">–</span><small>%</small></div>
+      <div class="rango">Rango ideal: 60 a 80 %</div>
+    </article>
+    <article class="sensor" id="co2">
+      <h2>CO₂</h2>
+      <div class="valor"><span class="num">–</span><small>ppm</small></div>
+      <div class="rango">Rango ideal: hasta 1000 ppm</div>
+    </article>
+    <article class="sensor" id="presion">
+      <h2>Presión atmosférica</h2>
+      <div class="valor"><span class="num">–</span><small>hPa</small></div>
+      <div class="rango">Rango ideal: 1008 a 1015 hPa</div>
+    </article>
+  </section>
+
+  <h3>Últimos mensajes recibidos</h3>
+  <ul id="log"><li>Esperando datos del simulador…</li></ul>
+</main>
+
+<script>
+  // Datos de conexión de EMQX Cloud (WebSocket seguro, puerto 8084)
+  const URL = "wss://v7611a93.ala.us-east-1.emqxsl.com:8084/mqtt";
+  const USUARIO = "vinossensor";
+  const CLAVE = "vinos2026";
+  const TOPICO = "vinosparry/bodega01/#";
+
+  const rangos = {
+    temperatura: [12, 18],
+    humedad: [60, 80],
+    co2: [0, 1000],
+    presion: [1008, 1015]
+  };
+
+  const estado = document.getElementById("estado");
+  const log = document.getElementById("log");
+  let primerMensaje = true;
+
+  const cliente = mqtt.connect(URL, {
+    username: USUARIO,
+    password: CLAVE,
+    clientId: "dashboard_" + Math.random().toString(16).slice(2, 10),
+    reconnectPeriod: 3000
+  });
+
+  cliente.on("connect", () => {
+    estado.textContent = "Conectado al broker";
+    estado.classList.add("conectado");
+    cliente.subscribe(TOPICO);
+  });
+
+  cliente.on("reconnect", () => {
+    estado.textContent = "Reconectando…";
+    estado.classList.remove("conectado");
+  });
+
+  cliente.on("error", (e) => {
+    estado.textContent = "Error de conexión";
+    estado.classList.remove("conectado");
+    console.error(e);
+  });
+
+  cliente.on("message", (topic, mensaje) => {
+    let datos;
+    try { datos = JSON.parse(mensaje.toString()); } catch { return; }
+
+    const nombre = topic.split("/").pop();
+    const tarjeta = document.getElementById(nombre);
+    if (tarjeta && typeof datos.valor === "number") {
+      tarjeta.querySelector(".num").textContent = datos.valor;
+      const [min, max] = rangos[nombre];
+      const fuera = datos.valor < min || datos.valor > max;
+      tarjeta.classList.toggle("fuera", fuera);
+      tarjeta.classList.toggle("ok", !fuera);
+    }
+
+    if (primerMensaje) { log.innerHTML = ""; primerMensaje = false; }
+    const li = document.createElement("li");
+    li.textContent = new Date().toLocaleTimeString("es-CL") + "  " + topic + "  " + mensaje.toString();
+    log.prepend(li);
+    while (log.children.length > 20) log.removeChild(log.lastChild);
+  });
+</script>
+</body>
+</html>
