@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Bodega Vinos Parry – Monitoreo IoT</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/mqtt/5.3.4/mqtt.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mqtt@5.3.4/dist/mqtt.min.js"></script>
 <style>
   :root {
     --fondo: #1c0f14;
@@ -82,7 +82,7 @@
 
 <script>
   // Datos de conexión de EMQX Cloud (WebSocket seguro, puerto 8084)
-  const URL = "wss://v7611a93.ala.us-east-1.emqxsl.com:8084/mqtt";
+  const BROKER_URL = "wss://v7611a93.ala.us-east-1.emqxsl.com:8084/mqtt";
   const USUARIO = "vinossensor";
   const CLAVE = "vinos2026";
   const TOPICO = "vinosparry/bodega01/#";
@@ -98,7 +98,12 @@
   const log = document.getElementById("log");
   let primerMensaje = true;
 
-  const cliente = mqtt.connect(URL, {
+  if (typeof mqtt === "undefined") {
+    estado.textContent = "No cargó la librería MQTT";
+    throw new Error("La librería mqtt.js no se pudo cargar");
+  }
+
+  const cliente = mqtt.connect(BROKER_URL, {
     username: USUARIO,
     password: CLAVE,
     clientId: "dashboard_" + Math.random().toString(16).slice(2, 10),
